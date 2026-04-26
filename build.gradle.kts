@@ -23,6 +23,7 @@ repositories {
 dependencies {
     intellijPlatform {
         val localPath = providers.gradleProperty("platformLocalPath").orNull
+            ?.takeIf { java.io.File(it).exists() }
         if (localPath != null) {
             local(localPath)
         } else {
