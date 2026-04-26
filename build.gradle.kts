@@ -22,7 +22,12 @@ repositories {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     intellijPlatform {
-        local("/Users/modelov.own/.gradle/caches/9.2.1/transforms/62476e296f861c9feb2828e10ec43fb8/transformed/idea-2025.3.1-aarch64")
+        val localPath = providers.gradleProperty("platformLocalPath").orNull
+        if (localPath != null) {
+            local(localPath)
+        } else {
+            intellijIdeaCommunity(providers.gradleProperty("platformVersion").get())
+        }
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.modules.json")
     }

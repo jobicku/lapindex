@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugins>
+    <plugin id="ru.jobick.lapindex"
+            url="https://github.com/jobicku/lapindex/releases/download/v1.0.0/lapindex-1.0.0.zip"
+            version="1.0.0">
+        <idea-version since-build="253"/>
+        <description>A plugin for easy work with LAPI dictionaries</description>
+    </plugin>
+</plugins>
