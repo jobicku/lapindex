@@ -3,3 +3,4 @@
 .intellijPlatform
 buildMETA-INF/
 /build
+.claude/settings.local.json
