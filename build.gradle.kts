@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "ru.jobick"
-version = "1.0.0-SNAPSHOT"
+version = "1.0.0"
 
 // Set the JVM language level used to build the project.
 kotlin {
@@ -35,7 +35,7 @@ intellijPlatform {
         }
 
         changeNotes = """
-            Initial version
+            1.0.0 - Первая версия. Индексация, навигация, валидация и поддержка build variants
         """.trimIndent()
     }
 

@@ -1,11 +1,22 @@
 <idea-plugin>
     <id>ru.jobick.lapindex</id>
     <name>Lapindex</name>
-    <vendor url="https://github.com/jobick">jobick</vendor>
+    <vendor url="https://github.com/jobick">jobick (n.modelov)</vendor>
     <description><![CDATA[
-        Navigation and validation for remote string keys.<br/>
-        Cmd+Click on a <code>remoteString("key")</code> argument navigates to the JSON definition.
-        Unknown keys are highlighted as errors.
+       A plugin for easy work with LAPI dictionaries in a project
+
+        Features:
+        <ul>
+          <li>Indexing lapi-keys</li>
+          <li>Validation lapi-keys</li>
+          <li>Support build variants</li>
+        </ul>
+
+        Hotkeys:
+        <ul>
+          <li><code>Cmd+Click</code>  - For navigate to declaration</li>
+          <li><code>Opt+F7</code>  - Open "Find Usage"</li>
+        </ul>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
