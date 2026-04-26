@@ -23,11 +23,11 @@ repositories {
 dependencies {
     intellijPlatform {
         val localPath = providers.gradleProperty("platformLocalPath").orNull
-            ?.takeIf { java.io.File(it).exists() }
+            ?.takeIf { File(it).exists() }
         if (localPath != null) {
             local(localPath)
         } else {
-            intellijIdeaCommunity(providers.gradleProperty("platformVersion").get())
+            androidStudio(providers.gradleProperty("platformVersion").get())
         }
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.modules.json")
