@@ -4,3 +4,4 @@
 buildMETA-INF/
 /build
 .claude/settings.local.json
+/docs/
