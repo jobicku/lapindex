@@ -1,4 +1,5 @@
 .gradle
 .idea
 .intellijPlatform
-build
+buildMETA-INF/
+/build
