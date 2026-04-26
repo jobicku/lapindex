@@ -33,5 +33,6 @@
             instance="ru.jobick.lapindex.settings.LapindexSettingsConfigurable"
             id="ru.jobick.lapindex.settings.LapindexSettingsConfigurable"
             displayName="Lapindex"/>
+        <referencesSearch implementation="ru.jobick.lapindex.findusages.JsonPropertyUsagesSearcher"/>
     </extensions>
 </idea-plugin>

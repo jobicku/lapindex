@@ -12,8 +12,7 @@ object ActiveVariantResolver {
             val modelClass = Class.forName(
                 "com.android.tools.idea.gradle.project.model.GradleAndroidModel"
             )
-            val model = modelClass.getMethod("get", facetClass)
-                .invoke(null, facet) ?: return emptyList()
+            val model = resolveModel(modelClass, facetClass, facet) ?: return emptyList()
             val variantName = modelClass.getMethod("getSelectedVariantName")
                 .invoke(model) as? String ?: return emptyList()
             decompose(variantName)
@@ -21,6 +20,24 @@ object ActiveVariantResolver {
             emptyList()
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    // GradleAndroidModel.get() may be a Kotlin companion function without @JvmStatic,
+    // so invoking it as a static method fails with NoSuchMethodException. Fall back to
+    // accessing the companion object field and invoking through it.
+    private fun resolveModel(modelClass: Class<*>, facetClass: Class<*>, facet: Any): Any? {
+        return try {
+            modelClass.getMethod("get", facetClass).invoke(null, facet)
+        } catch (_: NoSuchMethodException) {
+            try {
+                val companionField = modelClass.getDeclaredField("Companion")
+                companionField.isAccessible = true
+                val companion = companionField.get(null)
+                companion.javaClass.getMethod("get", facetClass).invoke(companion, facet)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
