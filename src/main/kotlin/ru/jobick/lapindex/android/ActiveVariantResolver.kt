@@ -1,35 +1,30 @@
 package ru.jobick.lapindex.android
 
 import com.intellij.openapi.module.Module
+import com.intellij.openapi.roots.ModuleRootManager
 
 object ActiveVariantResolver {
 
+    // After Gradle sync, IntelliJ registers only the active variant's source roots in the
+    // module. We extract source-set names from those paths (e.g. "app/src/dev/java" → "dev")
+    // and use them to pick the right JSON file — no Android plugin reflection required.
     fun getActiveSourceSetNames(module: Module): List<String> {
         return try {
-            val facetClass = Class.forName("com.android.tools.idea.facet.AndroidFacet")
-            val facet = facetClass.getMethod("getInstance", Module::class.java)
-                .invoke(null, module) ?: return emptyList()
-            val modelClass = Class.forName(
-                "com.android.tools.idea.gradle.project.model.GradleAndroidModel"
-            )
-            val model = modelClass.getMethod("get", facetClass)
-                .invoke(null, facet) ?: return emptyList()
-            val variantName = modelClass.getMethod("getSelectedVariantName")
-                .invoke(model) as? String ?: return emptyList()
-            decompose(variantName)
-        } catch (_: ClassNotFoundException) {
-            emptyList()
+            val segments = ModuleRootManager.getInstance(module).sourceRoots
+                .mapNotNull { root ->
+                    val path = root.path
+                    val srcIdx = path.lastIndexOf("/src/")
+                    if (srcIdx < 0) return@mapNotNull null
+                    val afterSrc = path.substring(srcIdx + 5)
+                    afterSrc.substringBefore('/').ifBlank { null }
+                }
+                .distinct()
+            // Put "main" last so variant-specific source sets take priority
+            val nonMain = segments.filter { it != "main" }
+            val main = segments.filter { it == "main" }
+            nonMain + main
         } catch (_: Exception) {
             emptyList()
         }
-    }
-
-    private fun decompose(variantName: String): List<String> {
-        val parts = variantName.split(Regex("(?=[A-Z])")).map { it.lowercase() }
-        return buildList {
-            add(variantName)
-            addAll(parts)
-            add("main")
-        }.distinct()
     }
 }
