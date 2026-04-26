@@ -29,23 +29,25 @@ class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSea
 
         val project = params.elementToSearch.project
 
-        // Dots in keys split into words by the index, so use the last segment
-        // to locate candidate files, then verify the full key.
-        val wordHint = key.split('.').lastOrNull { it.isNotBlank() } ?: key
+        // Keys may contain multiple separator types (. - / :). The word index splits on all of
+        // them, so extract the last non-blank word segment to drive the index lookup, then
+        // verify the full key inside the file scan.
+        val wordHint = key.split('.', '-', '/', ':')
+            .lastOrNull { it.isNotBlank() } ?: key
 
         PsiSearchHelper.getInstance(project).processAllFilesWithWordInLiterals(
             wordHint,
             scope,
             { file ->
                 if (file.virtualFile?.extension != "kt") return@processAllFilesWithWordInLiterals true
-                PsiTreeUtil.collectElementsOfType(file, KtStringTemplateExpression::class.java)
-                    .forEach { expr ->
-                        if (!RemoteStringUtil.isRemoteStringKey(expr)) return@forEach
-                        if (RemoteStringUtil.getKeyText(expr) != key) return@forEach
-                        expr.references.filterIsInstance<RemoteStringReference>()
-                            .firstOrNull()
-                            ?.let { consumer.process(it) }
-                    }
+                for (expr in PsiTreeUtil.collectElementsOfType(file, KtStringTemplateExpression::class.java)) {
+                    if (!RemoteStringUtil.isRemoteStringKey(expr)) continue
+                    if (RemoteStringUtil.getKeyText(expr) != key) continue
+                    val ref = expr.references.filterIsInstance<RemoteStringReference>().firstOrNull()
+                        ?: continue
+                    // Propagate stop signal: if consumer returns false, abort the scan
+                    if (!consumer.process(ref)) return@processAllFilesWithWordInLiterals false
+                }
                 true
             }
         )
