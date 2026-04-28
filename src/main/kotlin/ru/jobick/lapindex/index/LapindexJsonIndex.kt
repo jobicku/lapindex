@@ -7,6 +7,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.module.Module
+import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -56,12 +57,29 @@ class LapindexJsonIndex(private val project: Project) {
 
     fun find(key: String, module: Module?): JsonPropertyLocation? {
         val locations = cache[key] ?: return null
-        if (locations.size == 1 || module == null) return locations.first()
-        val activeSourceSets = ActiveVariantResolver.getActiveSourceSetNames(module)
-        for (sourceSet in activeSourceSets) {
-            val match = locations.firstOrNull { it.file.path.contains("/$sourceSet/") }
-            if (match != null) return match
+        if (locations.size == 1) return locations.first()
+
+        // Ask each candidate's owning module for its active source sets. This handles
+        // multi-module projects where the Kotlin call site is in a feature module with only
+        // "main" source roots, while variant-specific roots (dev/prod) live in a different
+        // module (:app, :lapi:impl). That owning module knows the active build variant.
+        for (location in locations) {
+            val owningModule = ModuleUtilCore.findModuleForFile(location.file, project)
+                ?: continue
+            val variantSets = ActiveVariantResolver.getActiveSourceSetNames(owningModule)
+                .filter { it != "main" }
+            if (variantSets.any { location.file.path.contains("/$it/") }) return location
         }
+
+        // Fallback for single-module projects or when owning module lookup fails
+        if (module != null) {
+            val activeSourceSets = ActiveVariantResolver.getActiveSourceSetNames(module)
+            for (sourceSet in activeSourceSets) {
+                val match = locations.firstOrNull { it.file.path.contains("/$sourceSet/") }
+                if (match != null) return match
+            }
+        }
+
         return locations.first()
     }
 
