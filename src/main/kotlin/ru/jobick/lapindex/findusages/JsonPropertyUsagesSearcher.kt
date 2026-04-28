@@ -23,11 +23,15 @@ class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSea
             (params.elementToSearch as? JsonProperty)?.name
         } ?: return
 
-        val scope = ReadAction.compute<GlobalSearchScope?, Throwable> {
-            params.effectiveSearchScope as? GlobalSearchScope
-        } ?: return
-
         val project = params.elementToSearch.project
+
+        // In multi-module projects effectiveSearchScope may be a non-Global scope (e.g. a module
+        // scope), which would silently miss Kotlin usages in other modules. Fall back to the full
+        // project scope so cross-module reverse navigation always works.
+        val scope = ReadAction.compute<GlobalSearchScope, Throwable> {
+            (params.effectiveSearchScope as? GlobalSearchScope)
+                ?: GlobalSearchScope.allScope(project)
+        }
 
         // Keys may contain multiple separator types (. - / :). The word index splits on all of
         // them, so extract the last non-blank word segment to drive the index lookup, then
