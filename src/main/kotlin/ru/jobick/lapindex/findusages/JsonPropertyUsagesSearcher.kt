@@ -25,12 +25,13 @@ class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSea
 
         val project = params.elementToSearch.project
 
-        // In multi-module projects effectiveSearchScope may be a non-Global scope (e.g. a module
-        // scope), which would silently miss Kotlin usages in other modules. Fall back to the full
-        // project scope so cross-module reverse navigation always works.
-        val scope = ReadAction.compute<GlobalSearchScope, Throwable> {
-            (params.effectiveSearchScope as? GlobalSearchScope)
-                ?: GlobalSearchScope.allScope(project)
+        // Use the caller-provided scope for filtering; for the word-index lookup we need a
+        // GlobalSearchScope — cast it, or fall back to allScope so cross-module files are found.
+        // We then re-apply the original (possibly narrower) scope per file so that user-selected
+        // scopes such as "Current File" are still honoured.
+        val effectiveScope = params.effectiveSearchScope
+        val globalScope = ReadAction.compute<GlobalSearchScope, Throwable> {
+            (effectiveScope as? GlobalSearchScope) ?: GlobalSearchScope.allScope(project)
         }
 
         // Keys may contain multiple separator types (. - / :). The word index splits on all of
@@ -41,8 +42,11 @@ class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSea
 
         PsiSearchHelper.getInstance(project).processAllFilesWithWordInLiterals(
             wordHint,
-            scope,
+            globalScope,
             { file ->
+                // Respect narrower caller-provided scopes (e.g. LocalSearchScope / Current File).
+                val vf = file.virtualFile
+                if (vf != null && !effectiveScope.contains(vf)) return@processAllFilesWithWordInLiterals true
                 if (file.virtualFile?.extension != "kt") return@processAllFilesWithWordInLiterals true
                 for (expr in PsiTreeUtil.collectElementsOfType(file, KtStringTemplateExpression::class.java)) {
                     if (!RemoteStringUtil.isRemoteStringKey(expr)) continue

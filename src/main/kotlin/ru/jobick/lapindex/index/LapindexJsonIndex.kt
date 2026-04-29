@@ -63,13 +63,23 @@ class LapindexJsonIndex(private val project: Project) {
         // multi-module projects where the Kotlin call site is in a feature module with only
         // "main" source roots, while variant-specific roots (dev/prod) live in a different
         // module (:app, :lapi:impl). That owning module knows the active build variant.
+        //
+        // Prioritise source-set order (from ActiveVariantResolver) over file order in settings:
+        // find the location whose matching source set has the lowest index in the resolver list.
+        var bestLocation: JsonPropertyLocation? = null
+        var bestPriority = Int.MAX_VALUE
         for (location in locations) {
             val owningModule = ModuleUtilCore.findModuleForFile(location.file, project)
                 ?: continue
             val variantSets = ActiveVariantResolver.getActiveSourceSetNames(owningModule)
                 .filter { it != "main" }
-            if (variantSets.any { location.file.path.contains("/$it/") }) return location
+            val priority = variantSets.indexOfFirst { location.file.path.contains("/$it/") }
+            if (priority != -1 && priority < bestPriority) {
+                bestPriority = priority
+                bestLocation = location
+            }
         }
+        if (bestLocation != null) return bestLocation
 
         // Fallback for single-module projects or when owning module lookup fails
         if (module != null) {
