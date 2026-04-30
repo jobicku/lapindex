@@ -3,14 +3,15 @@ package ru.jobick.lapindex.findusages
 import com.intellij.json.psi.JsonProperty
 import com.intellij.openapi.application.QueryExecutorBase
 import com.intellij.openapi.application.ReadAction
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
+import com.intellij.psi.PsiReferenceBase
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.PsiSearchHelper
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.Processor
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
-import ru.jobick.lapindex.reference.RemoteStringReference
 import ru.jobick.lapindex.util.RemoteStringUtil
 
 class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(false) {
@@ -25,13 +26,11 @@ class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSea
 
         val project = params.elementToSearch.project
 
-        // Use the caller-provided scope for filtering; for the word-index lookup we need a
-        // GlobalSearchScope — cast it, or fall back to allScope so cross-module files are found.
-        // We then re-apply the original (possibly narrower) scope per file so that user-selected
-        // scopes such as "Current File" are still honoured.
-        val effectiveScope = params.effectiveSearchScope
-        val globalScope = ReadAction.compute<GlobalSearchScope, Throwable> {
-            (effectiveScope as? GlobalSearchScope) ?: GlobalSearchScope.allScope(project)
+        // Always search the whole project: the JSON file may live in a low-level impl module
+        // (e.g. lapi:impl) whose getUseScope() excludes feature modules that depend only on
+        // lapi:api. Using projectScope avoids that incorrect narrowing.
+        val searchScope = ReadAction.compute<GlobalSearchScope, Throwable> {
+            GlobalSearchScope.projectScope(project)
         }
 
         // Keys may contain multiple separator types (. - / :). The word index splits on all of
@@ -42,18 +41,20 @@ class JsonPropertyUsagesSearcher : QueryExecutorBase<PsiReference, ReferencesSea
 
         PsiSearchHelper.getInstance(project).processAllFilesWithWordInLiterals(
             wordHint,
-            globalScope,
+            searchScope,
             { file ->
-                // Respect narrower caller-provided scopes (e.g. LocalSearchScope / Current File).
-                val vf = file.virtualFile
-                if (vf != null && !effectiveScope.contains(vf)) return@processAllFilesWithWordInLiterals true
                 if (file.virtualFile?.extension != "kt") return@processAllFilesWithWordInLiterals true
                 for (expr in PsiTreeUtil.collectElementsOfType(file, KtStringTemplateExpression::class.java)) {
                     if (!RemoteStringUtil.isRemoteStringKey(expr)) continue
                     if (RemoteStringUtil.getKeyText(expr) != key) continue
-                    val ref = expr.references.filterIsInstance<RemoteStringReference>().firstOrNull()
-                        ?: continue
-                    // Propagate stop signal: if consumer returns false, abort the scan
+                    // Synthetic reference that always resolves to the searched JsonProperty.
+                    // Using the existing RemoteStringReference would fail isReferenceTo() when
+                    // the active build variant resolves to a different JSON file than the one
+                    // the user invoked Find Usages on.
+                    val ref = object : PsiReferenceBase<KtStringTemplateExpression>(expr, true) {
+                        override fun resolve(): PsiElement = params.elementToSearch
+                        override fun getVariants(): Array<Any> = emptyArray()
+                    }
                     if (!consumer.process(ref)) return@processAllFilesWithWordInLiterals false
                 }
                 true

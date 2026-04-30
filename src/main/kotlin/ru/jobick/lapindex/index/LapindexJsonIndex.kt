@@ -7,7 +7,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.module.Module
-import com.intellij.openapi.module.ModuleUtilCore
+import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -59,38 +59,33 @@ class LapindexJsonIndex(private val project: Project) {
         val locations = cache[key] ?: return null
         if (locations.size == 1) return locations.first()
 
-        // Ask each candidate's owning module for its active source sets. This handles
-        // multi-module projects where the Kotlin call site is in a feature module with only
-        // "main" source roots, while variant-specific roots (dev/prod) live in a different
-        // module (:app, :lapi:impl). That owning module knows the active build variant.
-        //
-        // Prioritise source-set order (from ActiveVariantResolver) over file order in settings:
-        // find the location whose matching source set has the lowest index in the resolver list.
-        var bestLocation: JsonPropertyLocation? = null
-        var bestPriority = Int.MAX_VALUE
+        // Collect source-set names from source roots of ALL project modules.
+        // In Android Studio, only the active build variant's source roots are registered,
+        // so this set reflects the selected variant across the whole project
+        // (e.g. {"google", "debug", "main"} for the googleDebug variant).
+        // Scanning all modules is necessary because the JSON-owning module (lapi:impl)
+        // may not reliably surface its active variant via findModuleForFile when the
+        // project has 60+ modules and nested content roots.
+        val activeSourceSets: Set<String> = ModuleManager.getInstance(project).modules
+            .flatMapTo(mutableSetOf()) { ActiveVariantResolver.getActiveSourceSetNames(it) }
+        val activeNonMain = activeSourceSets - "main"
+
+        // Return the first location whose source set is active and flavor-specific.
         for (location in locations) {
-            val owningModule = ModuleUtilCore.findModuleForFile(location.file, project)
-                ?: continue
-            val variantSets = ActiveVariantResolver.getActiveSourceSetNames(owningModule)
-                .filter { it != "main" }
-            val priority = variantSets.indexOfFirst { location.file.path.contains("/$it/") }
-            if (priority != -1 && priority < bestPriority) {
-                bestPriority = priority
-                bestLocation = location
-            }
-        }
-        if (bestLocation != null) return bestLocation
-
-        // Fallback for single-module projects or when owning module lookup fails
-        if (module != null) {
-            val activeSourceSets = ActiveVariantResolver.getActiveSourceSetNames(module)
-            for (sourceSet in activeSourceSets) {
-                val match = locations.firstOrNull { it.file.path.contains("/$sourceSet/") }
-                if (match != null) return match
-            }
+            val sourceSet = sourceSetOf(location.file.path) ?: continue
+            if (sourceSet in activeNonMain) return location
         }
 
-        return locations.first()
+        // No active flavor-specific location — fall back to main, then first.
+        return locations.firstOrNull { sourceSetOf(it.file.path) == "main" }
+            ?: locations.first()
+    }
+
+    private fun sourceSetOf(path: String): String? {
+        val srcIdx = path.lastIndexOf("/src/")
+        if (srcIdx < 0) return null
+        val afterSrc = path.substring(srcIdx + 5)
+        return afterSrc.substringBefore('/').ifBlank { null }
     }
 
     fun allKeys(): Set<String> = cache.keys.toSet()

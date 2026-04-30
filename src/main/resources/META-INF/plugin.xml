@@ -45,5 +45,6 @@
             id="ru.jobick.lapindex.settings.LapindexSettingsConfigurable"
             displayName="Lapindex"/>
         <referencesSearch implementation="ru.jobick.lapindex.findusages.JsonPropertyUsagesSearcher"/>
+        <gotoDeclarationHandler implementation="ru.jobick.lapindex.navigation.JsonPropertyGotoDeclarationHandler"/>
     </extensions>
 </idea-plugin>
